@@ -9,7 +9,7 @@ def build_st_features_batch():
     input_dir = "path_data"
     output_dir = "model_inputs"
     num_top_paths = 50  # 选取的路径节点数量
-    time_step_sec = 60  # 时间步长，60秒（可改为10秒以增加样本量）
+    time_step_sec = 300  # 时间步长，60秒（可改为10秒以增加样本量）
     
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
@@ -44,23 +44,23 @@ def build_st_features_batch():
         
         # 确定该片段的时间范围
         start_t = df['timestamp'].min()
-        # 强制设为 15 分钟（针对 pNEUMA 无人机续航特性）
-        num_steps = 15 
+        # 输入张量维度，时间维度设为 15/5 = 3 
+        num_steps = 3 
         
         # 初始化当前片段的张量: (Time, Nodes, Feature)
-        X_chunk = np.zeros((num_steps, num_top_paths, 1))
+        X_chunk = np.zeros((num_steps, num_top_paths, 1)) #（3，50，1）
         
         for _, row in df.iterrows():
             if row['path_tuple'] in path_to_idx:
-                # 计算分钟偏移
+                # 计算分钟
                 t_idx = int((row['timestamp'] - start_t).total_seconds() // time_step_sec)
                 p_idx = path_to_idx[row['path_tuple']]
                 if 0 <= t_idx < num_steps:
                     X_chunk[t_idx, p_idx, 0] += 1
         
         st_chunks.append(X_chunk)
-        print(f"📦 已处理片段: {file_name} -> Tensor {X_chunk.shape}")
-
+        print(f" 已处理片段: {file_name} -> Tensor {X_chunk.shape}")
+    """
     # 4. 构建路径邻接矩阵 A_path (全局唯一)
     print("🕸️  正在构建路径邻接矩阵...")
     A_path = np.zeros((num_top_paths, num_top_paths))
@@ -69,11 +69,30 @@ def build_st_features_batch():
             # 基于路径间路段重叠定义相关性
             if set(global_paths[i]) & set(global_paths[j]):
                 A_path[i, j] = 1
-    
+    """
+    # 4. 构建带权重的路径邻接矩阵 (相似度衡量)
+    print(" 正在构建加权路径邻接矩阵 (Similarity-based)...")
+    num_top_paths = len(global_paths)
+    A_path = np.zeros((num_top_paths, num_top_paths))
+
+    for i in range(num_top_paths):
+        set_i = set(global_paths[i])
+        for j in range(num_top_paths):
+            set_j = set(global_paths[j])
+            # 计算交集和并集
+            intersection = len(set_i & set_j)
+            union = len(set_i | set_j)    
+            # Jaccard 相似度计算
+            similarity = intersection / union if union > 0 else 0
+            A_path[i, j] = similarity
+    # 归一化处理（可选，有助于模型收敛）
+    # 确保每行之和具有可比性
+    print(f"✅ 矩阵构建完成。最大相似度: {A_path.max():.2f}, 平均相似度: {A_path.mean():.4f}")
+
     # 5. 保存结果
     # 最终保存为一个包含多个张量的列表，训练时每个张量是一个独立的序列
     final_data = {
-        'x_list': st_chunks,       # List of [15, 50, 1] tensors
+        'x_list': st_chunks,       # List of [3, 50, 1] tensors
         'adj': A_path,             # [50, 50] matrix
         'path_labels': global_paths
     }

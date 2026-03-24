@@ -31,7 +31,7 @@ def map_matching():
     for file_path in parquet_files:
         file_name = os.path.basename(file_path)
         
-        # 【修改点 1】过滤掉不含轨迹点的静态信息文件
+        # 过滤掉不含轨迹点的静态信息文件
         if "_info" in file_name:
             print(f"⏭️  跳过信息文件: {file_name}")
             continue
@@ -39,20 +39,20 @@ def map_matching():
         print(f"--- 正在匹配轨迹文件: {file_name} ---")
         df = pd.read_parquet(file_path)
         
-        # 【修改点 2】健壮性检查：确保列名存在
+        # 确保列名存在
         if 'lon' not in df.columns or 'lat' not in df.columns:
             print(f"⚠️  警告：文件 {file_name} 缺少 'lon' 或 'lat' 列，跳过。")
             continue
 
         # 3. 核心：向量化匹配最近的路段
         print(f"   正在计算 {len(df)} 个点的最近路段...")
-        
+
         # nearest_edges 返回 (u, v, key) 元组列表
         try:
             edges = ox.nearest_edges(G, X=df['lon'], Y=df['lat'])
             
             # 将匹配结果存回 DataFrame
-            # 格式化为 "起点_终点" 的字符串，方便后续 GCN 构建邻接矩阵
+            # 格式化为 "起点_终点" 的字符串，后续构建邻接矩阵
             df['u'] = [e[0] for e in edges]
             df['v'] = [e[1] for e in edges]
             df['edge_id'] = df['u'].astype(str) + "_" + df['v'].astype(str)

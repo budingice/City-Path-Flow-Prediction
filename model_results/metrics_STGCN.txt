@@ -1,0 +1,3 @@
+Model: STGCN
+MAE: 2.8030
+RMSE: 3.7570

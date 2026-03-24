@@ -4,144 +4,163 @@ import torch.optim as optim
 from torch.utils.data import DataLoader, Dataset
 import numpy as np
 import matplotlib.pyplot as plt
+import pandas as pd
+import os
 
 # ==========================================
-# 1. 数据集定义：处理多个 15 分钟片段
+# 1. 数据集定义 (含归一化参数保留)
 # ==========================================
-class TrafficDataset(Dataset):
-    def __init__(self, pt_path, window_size=5, horizon=1):
+class TrafficDataset5Min(Dataset):
+    def __init__(self, pt_path):
         data = torch.load(pt_path)
-        self.x_list = data['x_list']  # List of (15, 50, 1)
-        self.window_size = window_size
-        self.horizon = horizon
-        
+        self.x_list = data['x_list']
         self.samples = []
         for chunk in self.x_list:
-            # chunk shape: (15, 50, 1) -> (Time, Nodes, Features)
-            # 在每个 15 分钟片段内进行滑动窗口采样
-            for t in range(len(chunk) - window_size - horizon + 1):
-                x = chunk[t : t + window_size, :, :]
-                y = chunk[t + window_size : t + window_size + horizon, :, 0] # 预测流量值
+            if chunk.shape[0] == 3:
+                x = chunk[0:2, :, :]  # 输入前2步 (T1, T2)
+                y = chunk[2, :, 0]    # 预测第3步 (T3)
                 self.samples.append((x, y))
+        
+        all_data = np.concatenate([s[0] for s in self.samples])
+        self.max_val = all_data.max() if all_data.max() > 0 else 1.0
 
     def __len__(self):
         return len(self.samples)
 
     def __getitem__(self, idx):
         x, y = self.samples[idx]
-        return torch.FloatTensor(x), torch.FloatTensor(y)
+        return torch.FloatTensor(x) / self.max_val, torch.FloatTensor(y) / self.max_val
 
 # ==========================================
-# 2. ST-GCN 模型定义
+# 2. STGCN-LSTM 模型定义
 # ==========================================
-class SimpleSTGCN(nn.Module):
-    def __init__(self, adj, num_nodes, in_channels, hidden_channels, out_channels):
-        super(SimpleSTGCN, self).__init__()
-        # 标准化邻接矩阵 A = D^-0.5 * A * D^-0.5
+class STGCN_LSTM(nn.Module):
+    def __init__(self, adj, num_nodes, hidden_dim=64):
+        super(STGCN_LSTM, self).__init__()
+        # 空间层：Jaccard 邻接矩阵处理
         adj = torch.FloatTensor(adj)
+        adj = adj + torch.eye(num_nodes)
         d = torch.diag(torch.pow(adj.sum(1), -0.5))
-        self.adj = d @ adj @ d 
+        self.adj = nn.Parameter(d @ adj @ d, requires_grad=False)
         
-        # 空间卷积层 (Graph Convolution)
-        self.gcn = nn.Linear(in_channels, hidden_channels)
+        self.gcn = nn.Sequential(
+            nn.Linear(1, 32),
+            nn.ReLU(),
+            nn.Linear(32, hidden_dim)
+        )
         
-        # 时间处理层 (Temporal - 这里用简单的全连接压缩时间维度)
-        self.temporal_fc = nn.Linear(5, 1) # 假设 window_size=5
-        
-        # 输出层
-        self.out_fc = nn.Linear(hidden_channels, out_channels)
+        # 时间层：LSTM 捕获动态依赖
+        self.lstm = nn.LSTM(input_size=hidden_dim, hidden_size=hidden_dim, batch_first=True)
+        self.out_fc = nn.Linear(hidden_dim, 1)
 
     def forward(self, x):
-        # x shape: (Batch, Time, Nodes, Features) -> (B, 5, 50, 1)
         batch_size, T, N, F = x.shape
+        # GCN 提取空间特征
+        x = x.view(-1, N, F)
+        x = torch.matmul(self.adj, x)
+        x = self.gcn(x) # (B*T, 50, 64)
         
-        # 1. 空间维度卷积 (GCN)
-        # 将时间维度并入 Batch 方便矩阵运算
-        x = x.view(-1, N, F) # (B*T, 50, 1)
-        # 聚合邻居信息: A * X
-        x = torch.matmul(self.adj.to(x.device), x) 
-        x = torch.relu(self.gcn(x)) # (B*T, 50, Hidden)
+        # LSTM 提取时间特征
+        x = x.view(batch_size, T, N, -1).permute(0, 2, 1, 3) # (B, 50, T, 64)
+        x = x.reshape(batch_size * N, T, -1)
+        lstm_out, _ = self.lstm(x)
+        x = lstm_out[:, -1, :] # 取最后一个时刻输出
         
-        # 2. 时间维度聚合
-        x = x.view(batch_size, T, N, -1) # (B, 5, 50, Hidden)
-        x = x.transpose(1, 2).transpose(2, 3) # (B, 50, Hidden, 5)
-        x = self.temporal_fc(x) # (B, 50, Hidden, 1)
-        
-        # 3. 输出
-        x = x.squeeze(-1) # (B, 50, Hidden)
-        x = self.out_fc(x) # (B, 50, 1)
-        return x.squeeze(-1) # (B, 50)
+        x = self.out_fc(x)
+        return x.view(batch_size, N)
 
 # ==========================================
-# 3. 训练主程序
+# 3. 核心训练与保存函数
 # ==========================================
-def main():
-    # 参数设置
-    WINDOW_SIZE = 5   # 用过去 5 分钟预测
-    BATCH_SIZE = 8
-    EPOCHS = 50
-    LEARNING_RATE = 0.001
-    
-    # 加载原始数据获取邻接矩阵
-    raw_data = torch.load("model_inputs/st_batch_data.pt")
-    adj = raw_data['adj']
-    num_nodes = adj.shape[0]
-
-    # 准备 DataLoader
-    dataset = TrafficDataset("model_inputs/st_batch_data.pt", window_size=WINDOW_SIZE)
-    train_size = int(0.8 * len(dataset))
-    test_size = len(dataset) - train_size
-    train_db, test_db = torch.utils.data.random_split(dataset, [train_size, test_size])
-    
-    train_loader = DataLoader(train_db, batch_size=BATCH_SIZE, shuffle=True)
-    test_loader = DataLoader(test_db, batch_size=BATCH_SIZE)
-
-    # 模型初始化
+def run_training():
+    # 配置参数
+    BATCH_SIZE = 4
+    EPOCHS = 100
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model = SimpleSTGCN(adj, num_nodes, 1, 64, 1).to(device)
-    optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE)
+    save_dir = "model_results"
+    os.makedirs(save_dir, exist_ok=True)
+
+    # 数据与模型加载
+    dataset = TrafficDataset5Min("model_inputs/st_batch_data.pt")
+    raw_data = torch.load("model_inputs/st_batch_data.pt")
+    train_loader = DataLoader(dataset, batch_size=BATCH_SIZE, shuffle=True)
+    
+    model = STGCN_LSTM(raw_data['adj'], num_nodes=50).to(device)
+    optimizer = optim.Adam(model.parameters(), lr=0.001)
     criterion = nn.MSELoss()
 
     # 训练循环
-    print(f"开始训练... 总样本数: {len(dataset)}, 训练集: {train_size}")
-    train_losses = []
-    
+    model.train()
     for epoch in range(EPOCHS):
-        model.train()
-        epoch_loss = 0
+        total_loss = 0
         for x, y in train_loader:
-            x, y = x.to(device), y.to(device).squeeze(1) # y: (B, 50)
-            
+            x, y = x.to(device), y.to(device)
             optimizer.zero_grad()
-            output = model(x)
-            loss = criterion(output, y)
+            pred = model(x)
+            loss = criterion(pred, y)
             loss.backward()
             optimizer.step()
-            epoch_loss += loss.item()
-        
-        avg_loss = epoch_loss / len(train_loader)
-        train_losses.append(avg_loss)
-        if (epoch+1) % 10 == 0:
-            print(f"Epoch [{epoch+1}/{EPOCHS}], Loss: {avg_loss:.4f}")
+            total_loss += loss.item()
+        if (epoch+1) % 20 == 0:
+            print(f"Epoch [{epoch+1}/{EPOCHS}], Loss: {total_loss/len(train_loader):.6f}")
 
-    # 可视化结果
+    # --- 关键：保存模型权重与元数据 ---
+    torch.save(model.state_dict(), f"{save_dir}/stgcn_lstm_weights.pth")
+    torch.save({'max_val': dataset.max_val, 'adj': raw_data['adj']}, f"{save_dir}/meta_info.pt")
+
+    # --- 关键：全量预测并保留结果 (用于绘图) ---
     model.eval()
+    all_preds, all_trues = [], []
     with torch.no_grad():
-        # 取一个 batch 看看预测效果
-        test_x, test_y = next(iter(test_loader))
-        pred = model(test_x.to(device)).cpu().numpy()
-        true = test_y.squeeze(1).numpy()
-        
-        plt.figure(figsize=(10, 5))
-        plt.plot(true[0], label='Actual Flow', alpha=0.7, marker='o')
-        plt.plot(pred[0], label='Predicted Flow', alpha=0.7, marker='x')
-        plt.title("Path Flow Prediction (Top 50 Paths)")
-        plt.xlabel("Path ID")
-        plt.ylabel("Vehicle Count / min")
-        plt.legend()
-        plt.show()
+        eval_loader = DataLoader(dataset, batch_size=len(dataset), shuffle=False)
+        for x_e, y_e in eval_loader:
+            p_e = model(x_e.to(device))
+            all_preds.append(p_e.cpu().numpy() * dataset.max_val)
+            all_trues.append(y_e.cpu().numpy() * dataset.max_val)
 
-    print("✅ 训练完成！")
+    y_pred = np.concatenate(all_preds)
+    y_true = np.concatenate(all_trues)
+
+    # --- 可视化代码 ---
+    plt.figure(figsize=(12, 5))
+    plt.bar(np.arange(50)-0.2, y_true[0], width=0.4, label='Actual', color='gray')
+    plt.bar(np.arange(50)+0.2, y_pred[0], width=0.4, label='Pred', color='blue')
+    plt.legend()
+    plt.show()
+    
+    # 保存全量明细 CSV (为了后续画残差分布图)
+    detailed_df = pd.DataFrame({
+        'Real_Value': y_true.flatten(),
+        'Pred_Value': y_pred.flatten(),
+        'Residual': y_true.flatten() - y_pred.flatten()
+    })
+    detailed_df.to_csv(f"{save_dir}/detailed_results_STGCN_LSTM.csv", index=False)
+    print(f"✅ 预测明细已保留至: {save_dir}/detailed_results_STGCN_LSTM.csv")
+
+    return y_true, y_pred
+
+def save_metrics(y_true, y_pred, save_dir="model_results"):
+    mae = np.mean(np.abs(y_true - y_pred))
+    rmse = np.sqrt(np.mean((y_true - y_pred)**2))
+    with open(f"{save_dir}/metrics_lstm.txt", "w") as f:
+        f.write(f"MAE: {mae:.4f}\nRMSE: {rmse:.4f}")
+    print(f"📊 统计指标已更新: {save_dir}/metrics_lstm.txt")
+def plot_worst_paths(y_true, y_pred, num_paths=3):
+    # 计算每条路径的 MAE
+    path_mae = np.mean(np.abs(y_true - y_pred), axis=0)
+    worst_idx = np.argsort(path_mae)[-num_paths:] # 获取误差最大的索引
+
+    plt.figure(figsize=(15, 5))
+    for i, idx in enumerate(worst_idx):
+        plt.subplot(1, num_paths, i+1)
+        plt.plot(y_true[:100, idx], label='Actual', color='gray', alpha=0.6)
+        plt.plot(y_pred[:100, idx], label='Predicted', color='red', linestyle='--')
+        plt.title(f"Path {idx} (MAE: {path_mae[idx]:.2f})")
+        plt.legend()
+    plt.tight_layout()
+    plt.show()
 
 if __name__ == "__main__":
-    main()
+    y_true, y_pred = run_training()
+    save_metrics(y_true, y_pred)
+    plot_worst_paths(y_true, y_pred)

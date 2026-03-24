@@ -8,14 +8,14 @@ def print_path_flow_details():
     try:
         data = torch.load(data_path)
     except FileNotFoundError:
-        print("❌ 找不到数据文件，请先运行 step5_build_st_features_batch.py")
+        print(" 找不到数据文件，请先运行 step5_build_st_features_batch.py")
         return
 
     x_list = data['x_list']        # 每个元素是 (15, 50, 1)
     path_labels = data['path_labels'] # 50条路径的元组列表
     
     print(f"========================================")
-    print(f"📊 路径流量详细分析报告")
+    print(f" 路径流量详细分析报告")
     print(f"片段总数: {len(x_list)} | 路径总数: {len(path_labels)}")
     print(f"========================================\n")
 

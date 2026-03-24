@@ -1,18 +1,24 @@
+import torch
 import pandas as pd
-import os
 
-# 加载一个生成好的路径文件
-path_file = "path_data/20181024_d1_0830_0900_paths.parquet" # 替换为你的文件名
-df_path = pd.read_parquet(path_file)
+# 加载你刚刚生成的 5分钟版数据
+data = torch.load("model_inputs/st_batch_data.pt")
+adj = data['adj']
+x_example = data['x_list'][0].squeeze(-1) # 取第一个 15min 片段
 
-# 1. 查看基础统计信息
-print(f"总计提取路径数: {len(df_path)}")
-print(f"平均路径长度 (路段数): {df_path['path_len'].mean():.2f}")
+print(f"✅ 成功加载。时间步数: {x_example.shape[0]}, 路径数: {x_example.shape[1]}")
 
-# 2. 抽样查看具体路径内容
-# 期望看到结果如: ['edge_1', 'edge_2', 'edge_3']
-sample = df_path.sample(3)
-for _, row in sample.iterrows():
-    print(f"\n车辆 ID: {row['track_id']}")
-    print(f"开始时间: {row['timestamp']}")
-    print(f"路径序列: {row['edge_id']}")
+# 1. 查看前 5 分钟（即第 1 个时间步）前 5 条路径的流量
+# 注意：现在的索引只有 0, 1, 2
+df_view = pd.DataFrame(
+    x_example[:, :5], 
+    index=["0-5min", "5-10min", "10-15min"],
+    columns=[f"P{i}" for i in range(5)]
+)
+
+print("\n📊 5分钟粒度流量预览 (前5条路径):")
+print(df_view)
+
+# 2. 检查邻接矩阵（前5条）
+print("\n🕸️ 相似度矩阵局部 (前5x5):")
+print(pd.DataFrame(adj[:5, :5]).round(2))
