@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>路径流量预测技术改进路线图</title>
+    <style>
+        :root {
+            --primary-dark: #2c3e50;
+            --accent-blue: #3498db;
+            --accent-orange: #f39c12;
+            --accent-green: #27ae60;
+            --accent-red: #e74c3c;
+            --bg-gray: #f9f9f9;
+        }
+
+        body {
+            font-family: 'Segoe UI', "Microsoft YaHei", sans-serif;
+            background-color: #f0f2f5;
+            margin: 0;
+            padding: 40px 20px;
+            color: var(--primary-dark);
+        }
+
+        .container {
+            max-width: 960px;
+            margin: auto;
+            background: white;
+            padding: 40px;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        }
+
+        header {
+            text-align: center;
+            border-bottom: 2px solid var(--primary-dark);
+            padding-bottom: 20px;
+            margin-bottom: 40px;
+        }
+
+        h1 { margin: 0; font-size: 24px; letter-spacing: 1px; }
+        .subtitle { color: var(--text-light); font-size: 14px; margin-top: 5px; }
+
+        /* 时间轴线 */
+        .timeline {
+            position: relative;
+            padding-left: 40px;
+        }
+
+        .timeline::before {
+            content: '';
+            position: absolute;
+            left: 15px;
+            top: 0;
+            bottom: 0;
+            width: 4px;
+            background: #e0e0e0;
+            border-radius: 2px;
+        }
+
+        /* 阶段卡片 */
+        .section {
+            position: relative;
+            margin-bottom: 40px;
+        }
+
+        .section::before {
+            content: '';
+            position: absolute;
+            left: -32px;
+            top: 5px;
+            width: 18px;
+            height: 18px;
+            background: white;
+            border: 4px solid var(--accent-blue);
+            border-radius: 50%;
+            z-index: 2;
+        }
+
+        .card {
+            background: var(--bg-gray);
+            border-radius: 8px;
+            padding: 20px;
+            border: 1px solid #eee;
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .phase-name { font-weight: bold; font-size: 18px; color: var(--accent-blue); }
+        .milestone { background: var(--primary-dark); color: white; font-size: 12px; padding: 4px 12px; border-radius: 20px; }
+
+        .content-grid {
+            display: grid;
+            grid-template-columns: 1.2fr 1fr;
+            gap: 20px;
+        }
+
+        .details ul { margin: 0; padding-left: 18px; font-size: 14px; line-height: 1.6; }
+        .details li { margin-bottom: 8px; }
+
+        .formula-box {
+            background: #fff;
+            border: 1px solid #ddd;
+            padding: 15px;
+            border-radius: 6px;
+            font-family: "Consolas", monospace;
+            font-size: 13px;
+        }
+
+        .formula-title { display: block; color: var(--accent-red); font-weight: bold; margin-bottom: 8px; border-bottom: 1px solid #eee; }
+
+        /* 特殊批注 */
+        .critique-note {
+            margin-top: 15px;
+            background: #fff5f5;
+            border-left: 4px solid var(--accent-red);
+            padding: 10px;
+            font-size: 13px;
+            color: #c0392b;
+        }
+
+        .fusion-logic {
+            margin-top: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 15px;
+            font-weight: bold;
+        }
+
+        .fusion-item { padding: 8px 15px; border-radius: 4px; border: 1px solid #ccc; font-size: 12px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <header>
+        <h1>路径流量预测技术改进路线图</h1>
+        <div class="subtitle">关联矩阵改进 )</div>
+    </header>
+
+    <div class="timeline">
+        
+        <div class="section">
+            <div class="card">
+                <div class="card-header">
+                    <span class="phase-name">1. 静态关联矩阵改进 (Static Foundation)</span>
+                    <span class="milestone">真实的路网约束</span>
+                </div>
+                <div class="content-grid">
+                    <div class="details">
+                        <ul>
+                            <li>计算 <b>Jaccard 相似度</b>：刻画路径间的物理路段重合度。</li>
+                            <li><b>改进：</b> 扩充二阶邻接逻辑。将“共用节点（Node）但不重合”的路径赋予关联分。</li>
+                            <li>作用：确立交通流影响的“物理可能性”。</li>
+                        </ul>
+                    </div>
+                    <div class="formula-box">
+                        <span class="formula-title">静态矩阵定义</span>
+                        A_static = Jaccard(i, j) + Node_Shared_Bias
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="section">
+            <div class="card" style="border-left: 5px solid var(--accent-orange);">
+                <div class="card-header">
+                    <span class="phase-name" style="color: var(--accent-orange);">2. 速度系数 (Dynamic Sensing)</span>
+                    <span class="milestone">提取速度状态</span>
+                </div>
+                <div class="content-grid">
+                    <div class="details">
+                        <ul>
+                            <li>提取过去 15 分钟的 <b>速度一阶差分 (ΔV)</b>。</li>
+                            <li>操作：捕捉“车速正在变慢”这一拥堵前兆，而非静态均值。</li>
+                            <li>特征映射：利用线性变换将速度趋势投影至状态向量 E。</li>
+                        </ul>
+                    </div>
+                    <div class="formula-box">
+                        <span class="formula-title">状态映射算子</span>
+                        E_i = σ(W_v · [v_t-w : v_t] + b)
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="section">
+            <div class="card" style="border-left: 5px solid var(--accent-green);">
+                <div class="card-header">
+                    <span class="phase-name" style="color: var(--accent-green);">3. 路径流量速度的相关度度量 </span>
+                    <span class="milestone">可能的方式</span>
+                </div>
+                <div class="content-grid">
+                    <div class="details">
+                        <ul>
+                            <li><b>点乘注意力 (Dot-product)：</b> 计算路径间速度波动模式的相似性。</li>
+                            <li>缩放因子：引入 √d 防止梯度消失，确保训练稳定性。</li>
+                            <li>Softmax：将得分归一化，突出强相关路径。</li>
+                        </ul>
+                    </div>
+                    <div class="formula-box">
+                        <span class="formula-title">动态相关得分</span>
+                        S_ij = Softmax( (Q_i · K_j^T) / √d )
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="section">
+            <div class="card" style="background: #eef7f2;">
+                <div class="card-header">
+                    <span class="phase-name">4. 两个矩阵的融合 (Hybrid Fusion)</span>
+                    <span class="milestone">静态的路网约束+速度变化的相似性的动态约束</span>
+                </div>
+                <div class="details">
+                    <p><b>融合逻辑：</b> 针对 Jaccard关联矩阵的局限性，采用“加权融合”</p>
+                    <div class="fusion-logic">
+                        <div class="fusion-item" style="background: #d1ecf1;">静态骨架 A_static</div>
+                        <span>+</span>
+                        <div class="fusion-item" style="background: #fff3cd;">动态反馈 S_dynamic</div>
+                        <span>➔</span>
+                        <div class="fusion-item" style="background: #d4edda; border: 2px solid #27ae60;">混合矩阵 A_final</div>
+                    </div>
+                </div>
+                <div class="critique-note">
+                    <b>可能的改进：</b> 采用 Hadamard 积 (⊙) 的强制过滤或者采用 <b>残差融合 (Residual Fusion)</b>，允许模型捕捉物理不重合但因“节点共享”产生的非线性影响。
+                </div>
+            </div>
+        </div>
+
+        <div class="section">
+            <div class="card" style="background: var(--primary-dark); color: white;">
+                <div class="card-header">
+                    <span class="phase-name" style="color: #ecf0f1;">5. 在毕业设计中的结果分析部分 (Validation)</span>
+                    <span class="milestone" style="background: var(--accent-green);">在毕业设计中的体现</span>
+                </div>
+                <div class="details" style="color: #bdc3c7;">
+                    <ul>
+                        <li>静态模型 T+3 步长下 $R^2 < 0.25$ 的误差过大，希望动态图能够改变这个结果。</li>
+                        <li>结果分析：在轨迹数据中提取相互影响的拥堵的路径对展示。
+                        </li>模型对比：基线模型（单纯的lstm预测模型）、静态图模型、动态图模型预测结果的对比验证
+                        <li>物理路网约束与动态速度反馈的混合预测框架。</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+</body>
+</html>

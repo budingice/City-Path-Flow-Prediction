@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 def get_absolute_base_time(file_name):
     """
     从文件名提取绝对时间基准
-    文件名示例: 20181024_d1_0830_0900.csv -> 2018-10-24 08:30:00
+    示例: 20181024_d1_0830_0900.csv -> 2018-10-24 08:30:00
     """
     try:
         parts = file_name.split('_')

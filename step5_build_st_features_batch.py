@@ -9,7 +9,7 @@ def build_st_features_batch():
     input_dir = "path_data"
     output_dir = "model_inputs"
     num_top_paths = 50  # 选取的路径节点数量
-    time_step_sec = 300  # 时间步长，60秒（可改为10秒以增加样本量）
+    time_step_sec = 60  # 时间步长，60秒（可改为10秒以增加样本量）
     
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
@@ -44,8 +44,9 @@ def build_st_features_batch():
         
         # 确定该片段的时间范围
         start_t = df['timestamp'].min()
-        # 输入张量维度，时间维度设为 15/5 = 3 
-        num_steps = 3 
+        # 输入张量维度，时间维度设为 15(分钟) / time_step_sec（秒） = 15 * 60 / time_step_sec      
+        num_steps = int(15 * 60 / time_step_sec)  # 例如 15分钟 * 60秒/分钟 / 60秒/步 = 15步 
+        print(f"DEBUG: 时间步数: {num_steps}")
         
         # 初始化当前片段的张量: (Time, Nodes, Feature)
         X_chunk = np.zeros((num_steps, num_top_paths, 1)) #（3，50，1）
