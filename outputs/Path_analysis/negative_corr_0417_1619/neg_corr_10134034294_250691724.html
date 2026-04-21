@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html>
+<head>
+    
+    <meta http-equiv="content-type" content="text/html; charset=UTF-8" />
+    <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.3/dist/leaflet.js"></script>
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Leaflet.awesome-markers/2.0.2/leaflet.awesome-markers.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.3/dist/leaflet.css"/>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.2/dist/css/bootstrap.min.css"/>
+    <link rel="stylesheet" href="https://netdna.bootstrapcdn.com/bootstrap/3.0.0/css/bootstrap-glyphicons.css"/>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.2.0/css/all.min.css"/>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/Leaflet.awesome-markers/2.0.2/leaflet.awesome-markers.css"/>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/python-visualization/folium/folium/templates/leaflet.awesome.rotate.min.css"/>
+    
+            <meta name="viewport" content="width=device-width,
+                initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+            <style>
+                #map_27f8170bb672d330ca07c9e96c4af7d2 {
+                    position: relative;
+                    width: 100.0%;
+                    height: 100.0%;
+                    left: 0.0%;
+                    top: 0.0%;
+                }
+                .leaflet-container { font-size: 1rem; }
+            </style>
+
+            <style>html, body {
+                width: 100%;
+                height: 100%;
+                margin: 0;
+                padding: 0;
+            }
+            </style>
+
+            <style>#map {
+                position:absolute;
+                top:0;
+                bottom:0;
+                right:0;
+                left:0;
+                }
+            </style>
+
+            <script>
+                L_NO_TOUCH = false;
+                L_DISABLE_3D = false;
+            </script>
+
+        
+</head>
+<body>
+    
+    
+    <div style="position: fixed; bottom: 50px; left: 50px; width: 380px; height: 140px;
+                background-color: white; border:2px solid grey; z-index:9999; font-size:13px;
+                padding: 12px; opacity: 0.95; border-radius: 5px;">
+      <h4 style="margin: 0 0 8px 0;">OD 负相关分析: 10134034294 -> 250691724</h4>
+      <b>相关系数</b>: -0.344<br/>
+      <b>数据点</b>: 20 个时间片<br/>
+      <b>竞争路径</b>: 7 条<br/>
+      <span style="color:#0066cc;">●</span> <b>Path A</b> (蓝色) vs 
+      <span style="color:#cc0000;">●</span> <b>Path B</b> (红色)<br/>
+      <i>负相关表明两条路径的选择呈反向关系</i>
+    </div>
+    
+    
+            <div class="folium-map" id="map_27f8170bb672d330ca07c9e96c4af7d2" ></div>
+        
+</body>
+<script>
+    
+    
+            var map_27f8170bb672d330ca07c9e96c4af7d2 = L.map(
+                "map_27f8170bb672d330ca07c9e96c4af7d2",
+                {
+                    center: [37.9800974, 23.7370345],
+                    crs: L.CRS.EPSG3857,
+                    ...{
+  "zoom": 13,
+  "zoomControl": true,
+  "preferCanvas": false,
+}
+
+                }
+            );
+
+            
+
+        
+    
+            var tile_layer_17665470ae85a78283decdae05ee3dd6 = L.tileLayer(
+                "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",
+                {
+  "minZoom": 0,
+  "maxZoom": 20,
+  "maxNativeZoom": 20,
+  "noWrap": false,
+  "attribution": "\u0026copy; \u003ca href=\"https://www.openstreetmap.org/copyright\"\u003eOpenStreetMap\u003c/a\u003e contributors \u0026copy; \u003ca href=\"https://carto.com/attributions\"\u003eCARTO\u003c/a\u003e",
+  "subdomains": "abcd",
+  "detectRetina": false,
+  "tms": false,
+  "opacity": 1,
+}
+
+            );
+        
+    
+            tile_layer_17665470ae85a78283decdae05ee3dd6.addTo(map_27f8170bb672d330ca07c9e96c4af7d2);
+        
+    
+            var poly_line_b728da7d9e2199aecdbd3ad02adbb347 = L.polyline(
+                [[37.9800974, 23.7370345], [37.979576, 23.7360634], [37.9795546, 23.7360225], [37.9795354, 23.7359852], [37.9802494, 23.735395], [37.9795937, 23.735937], [37.9795354, 23.7359852], [37.9795354, 23.7359852], [37.9795022, 23.7359224], [37.9792474, 23.7354357], [37.9792474, 23.7354357], [37.9799327, 23.7348434], [37.9792474, 23.7354357], [37.9788507, 23.7346781], [37.9787387, 23.7344641], [37.9786886, 23.7343686]],
+                {"bubblingMouseEvents": true, "color": "#0066cc", "dashArray": null, "dashOffset": null, "fill": false, "fillColor": "#0066cc", "fillOpacity": 0.2, "fillRule": "evenodd", "lineCap": "round", "lineJoin": "round", "noClip": false, "opacity": 0.8, "smoothFactor": 1.0, "stroke": true, "weight": 5}
+            ).addTo(map_27f8170bb672d330ca07c9e96c4af7d2);
+        
+    
+        var popup_4f676dfbe6a2d345160760a62d85f4ff = L.popup({
+  "maxWidth": 300,
+});
+
+        
+            
+                var html_9fa54dffe79f14e40faa0b0249a9c64a = $(`<div id="html_9fa54dffe79f14e40faa0b0249a9c64a" style="width: 100.0%; height: 100.0%;"><b>Path A (蓝色)</b><br/>Flow Corr: -0.344<br/>Path: 10134034294_300400470-10174555843_300400470-300400470_653971685-653971685_653971...</div>`)[0];
+                popup_4f676dfbe6a2d345160760a62d85f4ff.setContent(html_9fa54dffe79f14e40faa0b0249a9c64a);
+            
+        
+
+        poly_line_b728da7d9e2199aecdbd3ad02adbb347.bindPopup(popup_4f676dfbe6a2d345160760a62d85f4ff)
+        ;
+
+        
+    
+    
+            poly_line_b728da7d9e2199aecdbd3ad02adbb347.bindTooltip(
+                `<div>
+                     Path A: 10134034294_300400470-10174555843_300400470-300400...
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+            var poly_line_1a7593082af76246e28b46b77bf7f1d8 = L.polyline(
+                [[37.9800974, 23.7370345], [37.979576, 23.7360634], [37.9795546, 23.7360225], [37.9795354, 23.7359852], [37.9795354, 23.7359852], [37.9791562, 23.7362987], [37.9789881, 23.7364376], [37.9789518, 23.7364676], [37.9789285, 23.7364867], [37.9795354, 23.7359852], [37.9795022, 23.7359224], [37.9792474, 23.7354357], [37.9792474, 23.7354357], [37.9788507, 23.7346781], [37.9787387, 23.7344641], [37.9786886, 23.7343686]],
+                {"bubblingMouseEvents": true, "color": "#cc0000", "dashArray": null, "dashOffset": null, "fill": false, "fillColor": "#cc0000", "fillOpacity": 0.2, "fillRule": "evenodd", "lineCap": "round", "lineJoin": "round", "noClip": false, "opacity": 0.8, "smoothFactor": 1.0, "stroke": true, "weight": 5}
+            ).addTo(map_27f8170bb672d330ca07c9e96c4af7d2);
+        
+    
+        var popup_ecbb84dc26124f222182681efc798c93 = L.popup({
+  "maxWidth": 300,
+});
+
+        
+            
+                var html_1331f9cc94f5197b5a155d85fab63482 = $(`<div id="html_1331f9cc94f5197b5a155d85fab63482" style="width: 100.0%; height: 100.0%;"><b>Path B (红色)</b><br/>Flow Corr: -0.344<br/>Path: 10134034294_300400470-300400470_250691755-300400470_653971685-653971685_25069172...</div>`)[0];
+                popup_ecbb84dc26124f222182681efc798c93.setContent(html_1331f9cc94f5197b5a155d85fab63482);
+            
+        
+
+        poly_line_1a7593082af76246e28b46b77bf7f1d8.bindPopup(popup_ecbb84dc26124f222182681efc798c93)
+        ;
+
+        
+    
+    
+            poly_line_1a7593082af76246e28b46b77bf7f1d8.bindTooltip(
+                `<div>
+                     Path B: 10134034294_300400470-300400470_250691755-30040047...
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+</script>
+</html>

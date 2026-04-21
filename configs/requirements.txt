@@ -1,0 +1,25 @@
+# --- 数据处理与高性能存储 ---
+pandas==2.3.3
+numpy==1.26.4
+pyyaml==6.0.3
+pyarrow==22.0.0
+
+# --- 地理空间与路网处理 ---
+osmnx==2.0.7
+networkx==3.4.2
+geopandas==1.1.2
+shapely==2.1.2
+pyproj==3.7.1
+
+# --- 可视化 ---
+matplotlib==3.10.8
+seaborn==0.13.2
+
+# --- 深度学习 (已安装) ---
+torch==2.2.2
+torchvision==0.17.2
+torchaudio==2.2.2
+
+# --- 进度条与辅助 ---
+tqdm==4.67.1
+scikit-learn==1.7.2

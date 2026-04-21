@@ -1,0 +1,9 @@
+path:
+  raw_data_dir: "data/raw/dataset"               # 存放 pNEUMA 原始 CSV 的目录
+  graph_file: "data/raw/athens_road_network.graphml" 
+  processed_dir: "data/processed"        # 所有中间件产出地
+  checkpoint_dir: "checkpoints"
+  log_dir: "logs"
+
+preprocess:
+  sampling_rate: 25                      # 25Hz -> 1Hz
