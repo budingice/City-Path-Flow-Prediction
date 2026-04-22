@@ -11,14 +11,22 @@ def main():
     # 1. 加载配置
     with open("configs/config.yaml", "r", encoding="utf-8") as f:
         config = yaml.safe_load(f)
-
+    print(f"当前查找路径: {os.path.abspath(config['path']['raw_data_dir'])}")
+    
+    # 探测原始文件
+    raw_files = [f for f in os.listdir(config['path']['raw_data_dir']) if f.endswith('.csv')]
+    print(f"检测到原始 CSV 文件数量: {len(raw_files)}")
+    if len(raw_files) == 0:
+        print("❌ 警告：未发现待处理的原始数据，请检查路径配置！")
+        return
+    
     # 2. 初始化流水线
     pipeline = TrafficDataPipeline(config)
 
     # 3. 运行测试流程
     print("--- 阶段 1: 原始数据解析 ---")
     pipeline.step_1_parse_pneuma()
-
+    
     print("\n--- 阶段 2: 路网匹配 ---")
     pipeline.step_3_map_matching()
 

@@ -8,6 +8,8 @@ import logging
 import osmnx as ox
 import matplotlib.pyplot as plt
 import numpy as np
+from tqdm import tqdm  
+import logging
 
 class TrafficDataPipeline:
     def __init__(self, config):
@@ -143,35 +145,32 @@ class TrafficDataPipeline:
             logging.error("没有找到已解析的轨迹文件，请确认 Step 1 已成功运行")
             return
 
-        # 3. 执行匹配循环
-        for file_path in input_files:
+        # 1. 使用 tqdm 包装你的列表
+        pbar = tqdm(input_files, desc="路网匹配进度")
+        
+        # 2. 关键：迭代对象必须是 pbar 而不是 input_files
+        for file_path in pbar: 
             file_name = os.path.basename(file_path)
-            # 定义匹配后的文件名，防止重复处理
             output_name = file_name.replace('_parsed.parquet', '_matched.parquet')
             output_path = os.path.join(self.processed_dir, output_name)
 
             if os.path.exists(output_path):
-                logging.info(f"⏭️  文件已匹配，跳过: {output_name}")
+                # 3. 建议：跳过时也打印到 pbar，而不是 logging
+                pbar.set_description(f"跳过: {file_name[:10]}")
                 continue
-
-            logging.info(f"--- 正在匹配轨迹: {file_name} ---")
-            df = pd.read_parquet(file_path)
+            
+            # 动态更新进度条右侧的状态文字
+            pbar.set_description(f"匹配中: {file_name[:10]}")
 
             try:
-                # 向量化计算最近的路段 (u, v, key)
-                # X 为经度 lon, Y 为纬度 lat
+                df = pd.read_parquet(file_path)
                 edges = ox.nearest_edges(G, X=df['lon'], Y=df['lat'])
                 
-                # 提取起点 u 和终点 v
                 df['u'] = [e[0] for e in edges]
                 df['v'] = [e[1] for e in edges]
-                
-                # 生成唯一的边 ID (用于后续 Path Flow 统计)
                 df['edge_id'] = df['u'].astype(str) + "_" + df['v'].astype(str)
                 
-                # 保存匹配结果
                 df.to_parquet(output_path, index=False)
-                logging.info(f"✅ 匹配完成: {output_name}")
 
             except Exception as e:
                 logging.error(f"❌ 处理文件 {file_name} 时出错: {str(e)}")
