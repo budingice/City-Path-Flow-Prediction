@@ -176,4 +176,45 @@ class TrafficDataPipeline:
                 logging.error(f"❌ 处理文件 {file_name} 时出错: {str(e)}")
 
         logging.info("所有轨迹已完成路网吸附。")
-        # 后续你会把 Step 2-3, 4-5 的逻辑也写进这个类中...
+    
+    def step_4_denoise_and_clean(self):
+        """
+        阶段 4: 轨迹去噪与分段
+        """
+        from .trajectory import clean_trajectories, segment_trajectories
+        
+        input_files = glob.glob(os.path.join(self.processed_dir, "*_matched.parquet"))
+        clean_dir = os.path.join(self.processed_dir, "cleaned")
+        os.makedirs(clean_dir, exist_ok=True)
+
+        for f in tqdm(input_files, desc="去噪与清洗"):
+            df = pd.read_parquet(f)
+            # 1. 去噪
+            df_clean = clean_trajectories(df)
+            # 2. 分段
+            df_final = segment_trajectories(df_clean)
+            
+            save_path = os.path.join(clean_dir, os.path.basename(f).replace(".parquet", "_clean.parquet"))
+            df_final.to_parquet(save_path, index=False)
+        
+        self.clean_dir = clean_dir
+        logging.info(f"✅ 清洗完成，存储于: {clean_dir}")
+
+    def step_5_statistical_analysis(self):
+        """阶段 5: 流量聚合与统计报告"""
+        from .analysis import extract_path_volatility
+        
+        clean_files = glob.glob(os.path.join(self.clean_dir, "*.parquet"))
+        df_list = [pd.read_parquet(f) for f in clean_files]
+        time_labels = [os.path.basename(f).split('_')[2] for f in clean_files]
+        
+        # 提取流量矩阵和统计信息
+        flow_matrix, stats = extract_path_volatility(df_list, time_labels)
+        
+        # 保存结果用于模型输入
+        flow_matrix.to_parquet(os.path.join(self.processed_dir, "flow_matrix_T_N.parquet"))
+        stats.to_csv(os.path.join(self.processed_dir, "edge_stats.csv"))
+        
+        logging.info("✅ 流量矩阵提取完成，形状为: " + str(flow_matrix.shape))
+        return flow_matrix    
+    # 后续你会把 Step 2-3, 4-5 的逻辑也写进这个类中...

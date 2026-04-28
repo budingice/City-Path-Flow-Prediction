@@ -1,42 +1,65 @@
 import yaml
 import os
 import sys
+import argparse
 
-# 解决包导入问题：确保程序能找到 src 文件夹
+# 确保程序能找到 src 文件夹
 sys.path.append(os.getcwd())
 
 from src.data_utils.preprocess import TrafficDataPipeline
 
 def main():
-    # 1. 加载配置
+    # 1. 配置命令行参数
+    parser = argparse.ArgumentParser(description="Traffic Data Pipeline Test Runner")
+    parser.add_argument('--steps', nargs='+', type=int, default=[1, 3, 4, 5],
+                        help='要运行的阶段编号，例如: --steps 1 3 (默认运行 1,3,4,5)')
+    args = parser.parse_args()
+
+    # 2. 加载配置
     with open("configs/config.yaml", "r", encoding="utf-8") as f:
         config = yaml.safe_load(f)
-    print(f"当前查找路径: {os.path.abspath(config['path']['raw_data_dir'])}")
     
-    # 探测原始文件
-    raw_files = [f for f in os.listdir(config['path']['raw_data_dir']) if f.endswith('.csv')]
-    print(f"检测到原始 CSV 文件数量: {len(raw_files)}")
-    if len(raw_files) == 0:
-        print("❌ 警告：未发现待处理的原始数据，请检查路径配置！")
-        return
-    
-    # 2. 初始化流水线
+    # 3. 初始化流水线
     pipeline = TrafficDataPipeline(config)
 
-    # 3. 运行测试流程
-    print("--- 阶段 1: 原始数据解析 ---")
-    pipeline.step_1_parse_pneuma()
+    # 4. 根据参数运行对应流程
+    # 注意：这里跳过了 step_2，因为 step_3 内部通常会自动调用 step_2 加载路网
     
-    print("\n--- 阶段 2: 路网匹配 ---")
-    pipeline.step_3_map_matching()
+    if 1 in args.steps:
+        print("\n--- 阶段 1: 原始数据解析 ---")
+        pipeline.step_1_parse_pneuma()
 
-    # 4. 检查产出
-    print("\n--- 检查结果 ---")
-    files = os.listdir(config['path']['processed_dir'])
-    if any("_matched.parquet" in f for f in files):
-        print("✅ 恭喜！Step 1-3 已经完全跑通。")
-    else:
-        print("❌ 文件夹中未发现匹配后的结果，请检查报错日志。")
+    if 3 in args.steps:
+        print("\n--- 阶段 3: 路网匹配 ---")
+        pipeline.step_3_map_matching()
+
+    if 4 in args.steps:
+        print("\n--- 阶段 4: 轨迹去噪与清洗 ---")
+        # 对应你新整合进 preprocess.py 的方法
+        pipeline.step_4_denoise_and_clean()
+
+    if 5 in args.steps:
+        print("\n--- 阶段 5: 流量聚合与统计分析 ---")
+        # 对应你新整合进 preprocess.py 的方法
+        pipeline.step_5_statistical_analysis()
+
+    # 5. 最终检查
+    print("\n--- 流程检查 ---")
+    processed_files = os.listdir(config['path']['processed_dir'])
+    
+    check_map = {
+        1: ("_parsed.parquet", "阶段 1 (解析)"),
+        3: ("_matched.parquet", "阶段 3 (匹配)"),
+        4: ("_clean.parquet", "阶段 4 (去噪)"),
+        5: ("flow_matrix_T_N.parquet", "阶段 5 (统计)")
+    }
+
+    for s in args.steps:
+        suffix, name = check_map.get(s, (None, None))
+        if suffix and any(suffix in f for f in processed_files if isinstance(f, str)):
+            print(f"✅ {name} 产出文件已确认。")
+        elif suffix:
+            print(f"⚠️  {name} 运行结束，但在目录下未发现目标文件，请检查逻辑。")
 
 if __name__ == "__main__":
     main()
