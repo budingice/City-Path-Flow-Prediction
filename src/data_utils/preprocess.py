@@ -201,20 +201,137 @@ class TrafficDataPipeline:
         logging.info(f"✅ 清洗完成，存储于: {clean_dir}")
 
     def step_5_statistical_analysis(self):
-        """阶段 5: 流量聚合与统计报告"""
-        from .analysis import extract_path_volatility
+        """阶段 5: 流量聚合与全自动化质量报告"""
+        from .analysis import extract_path_volatility, generate_quality_report, generate_heatmap
+        import glob
+
+        # --- 核心修复：确保 clean_dir 属性存在 ---
+        if not hasattr(self, 'clean_dir'):
+            # 如果没有这个属性，手动构造路径（通常是 data/processed/cleaned）
+            self.clean_dir = os.path.join(self.processed_dir, "cleaned")
+        # 1. 路径准备
+        clean_files = sorted(glob.glob(os.path.join(self.clean_dir, "*.parquet")))
+        eda_dir = "eda_results/denoise_verification"
+        os.makedirs(eda_dir, exist_ok=True)
+
+        if not clean_files:
+            logging.error("❌ 未发现清洗后的数据，请先运行 Step 4")
+            return None
+
+        # 2. 循环生成对比图表
+        df_list = []
+        time_labels = []
         
-        clean_files = glob.glob(os.path.join(self.clean_dir, "*.parquet"))
-        df_list = [pd.read_parquet(f) for f in clean_files]
-        time_labels = [os.path.basename(f).split('_')[2] for f in clean_files]
-        
-        # 提取流量矩阵和统计信息
+        for f_clean in clean_files:
+            df_c = pd.read_parquet(f_clean)
+            df_list.append(df_c)
+            
+            # 提取标签 (假设文件名格式: pneuma_athens_0830_0900_matched_clean.parquet)
+            parts = os.path.basename(f_clean).split('_')
+            label = f"{parts[2]}_{parts[3]}"
+            time_labels.append(label)
+
+            # 寻找对应的原始匹配文件进行质量对比
+            raw_fname = os.path.basename(f_clean).replace("_clean.parquet", ".parquet")
+            raw_path = os.path.join(self.processed_dir, raw_fname)
+            
+            if os.path.exists(raw_path):
+                df_r = pd.read_parquet(raw_path)
+                report_path = os.path.join(eda_dir, f"{label}_quality_report.png")
+                generate_quality_report(df_r, df_c, report_path, title_suffix=label)
+                logging.info(f"📊 已生成质量对比报告: {label}")
+
+        # 3. 提取流量矩阵 (用于模型输入)
         flow_matrix, stats = extract_path_volatility(df_list, time_labels)
         
-        # 保存结果用于模型输入
+        # 保存结果
         flow_matrix.to_parquet(os.path.join(self.processed_dir, "flow_matrix_T_N.parquet"))
         stats.to_csv(os.path.join(self.processed_dir, "edge_stats.csv"))
         
-        logging.info("✅ 流量矩阵提取完成，形状为: " + str(flow_matrix.shape))
-        return flow_matrix    
-    # 后续你会把 Step 2-3, 4-5 的逻辑也写进这个类中...
+        # 4. 生成全域流量热力图
+        full_coords = pd.concat([df[['lat', 'lon']] for df in df_list], ignore_index=True)
+        generate_heatmap(full_coords, os.path.join(eda_dir, "overall_traffic_heatmap.html"))
+        
+        logging.info(f"✅ 阶段 5 完成！报告位于 {eda_dir}，矩阵位于 data/processed/")
+        return flow_matrix
+    
+    def step_6_extract_path_features(self):
+        """
+        阶段 6: 路径指纹提取与运动学特征构建
+        """
+        from .kinematics import extract_path_features
+        from .analysis import plot_path_kinematics_report
+        import glob
+        from tqdm import tqdm
+
+        # 路径初始化
+        if not hasattr(self, 'clean_dir'):
+            self.clean_dir = os.path.join(self.processed_dir, "cleaned")
+        
+        data_output_dir = os.path.join(self.processed_dir, "path_features")
+        viz_output_dir = "eda_results/path_analysis"
+        os.makedirs(data_output_dir, exist_ok=True)
+        os.makedirs(viz_output_dir, exist_ok=True)
+        
+        input_files = sorted(glob.glob(os.path.join(self.clean_dir, "*.parquet")))
+        if not input_files:
+            logging.error("❌ 阶段 6 失败：未发现清洗后的文件，请先运行 Step 4")
+            return
+
+        # 2. 单循环处理：提取 + 保存 + 绘图
+        for f_path in tqdm(input_files, desc="阶段 6: 路径特征提取与绘图"):
+            # A. 读取数据
+            df = pd.read_parquet(f_path)
+            
+            # B. 执行特征提取
+            path_results = extract_path_features(df)
+            
+            # C. 提取文件名标签 (例如 0830_0900)
+            parts = os.path.basename(f_path).split('_')
+            label = f"{parts[2]}_{parts[3]}"
+            
+            # D. 保存 Parquet 特征数据
+            fname = f"{label}_path_kinematics.parquet"
+            save_path = os.path.join(data_output_dir, fname)
+            path_results.to_parquet(save_path, index=False)
+            
+            # E. 生成并保存可视化图表
+            plot_path_kinematics_report(path_results, viz_output_dir, label=label)
+        
+        logging.info(f"✅ 阶段 6 完成！")
+        logging.info(f"   - 特征数据: {data_output_dir}")
+        logging.info(f"   - 分析图表: {viz_output_dir}")
+        
+    def step_7_generate_model_ready_data(self, num_top_paths=50, time_step_sec=60):
+        """阶段 7: 构建模型输入张量 (ST-Graph)"""
+        from .generator import PathTensorGenerator
+        import torch
+        import os
+        import glob
+        from tqdm import tqdm
+        import pandas as pd
+
+        input_dir = os.path.join(self.processed_dir, "path_features")
+        output_path = "data/model_input/st_batch_data.pt"
+        os.makedirs(os.path.dirname(output_path), exist_ok=True)
+
+        path_files = sorted(glob.glob(os.path.join(input_dir, "*.parquet")))
+        
+        gen = PathTensorGenerator(num_top_paths, time_step_sec)
+        global_paths = gen.build_global_path_library(path_files)
+        
+        # 构建两种邻接矩阵
+        adj_semantic = gen.build_semantic_adj()
+        adj_topo = gen.build_topology_adj()
+        
+        st_chunks = [gen.generate_chunk(pd.read_parquet(f)) for f in tqdm(path_files, desc="生成时空张量")]
+
+        # 封装所有矩阵和数据
+        torch.save({
+            'x_list': st_chunks,
+            'adj_semantic': adj_semantic,
+            'adj_topo': adj_topo,
+            'path_labels': global_paths
+        }, output_path)
+        
+        logging.info(f"✨ 输入特征数据已就绪！")

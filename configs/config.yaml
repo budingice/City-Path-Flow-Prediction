@@ -1,9 +1,59 @@
+# ==========================================
+# 路径配置 (Paths)
+# ==========================================
 path:
-  raw_data_dir: "data/raw/dataset"               # 存放 pNEUMA 原始 CSV 的目录
+  raw_data_dir: "data/raw/dataset"        
   graph_file: "data/raw/athens_road_network.graphml" 
-  processed_dir: "data/processed"        # 所有中间件产出地
-  checkpoint_dir: "checkpoints"
-  log_dir: "logs"
+  processed_dir: "data/processed"         
+  
+  # 模型训练产出
+  model_input_pt: "data/model_input/st_batch_data.pt" 
+  checkpoint_dir: "checkpoints"           
+  log_dir: "logs"                         
+  exp_root: "experiments"                 # 对应你的 experiments/ 文件夹
 
+# ==========================================
+# 预处理配置 (Preprocess)
+# ==========================================
 preprocess:
-  sampling_rate: 25                      # 25Hz -> 1Hz
+  sampling_rate: 25                       
+  num_top_paths: 50                       # N = 50
+  time_step_sec: 60                       # T_step = 1min
+
+# ==========================================
+# 训练超参数 (Training)
+# ==========================================
+train:
+  device: "cuda"                          # cuda 或 cpu
+  seed: 42                                
+  batch_size: 32                          
+  epochs: 100                             
+  lr: 0.0005                               
+  weight_decay: 1.0e-4                    
+  early_stop: 30                          
+  
+  # 实验设置 (消融实验核心)
+  window_size: 12                         # 输入过去 12 分钟
+  horizon: 3                              # 预测未来 3 分钟
+  split_ratio: [0.7, 0.1, 0.2]            # 训练/验证/测试比例
+  adj_type: "semantic"                    # 可选: semantic, topo
+
+# ==========================================
+# 模型架构参数 (Model Architecture)
+# ==========================================
+model:
+  adaptive:
+    hidden_dim: 128                       # LSTM 和 GCN 的隐藏层维度
+    embed_dim: 10                         # 自适应矩阵的 Embedding 维度 (nodevec)
+    dropout: 0.2
+  
+  vanilla:
+    hidden_dim: 64
+    dropout: 0.2
+
+# ==========================================
+# 评估与日志 (Logging)
+# ==========================================
+logging:
+  save_results_tags: ["mae", "rmse", "mape"]
+  plot_examples: 3                        # 测试结束后随机画几条路径的对比图
