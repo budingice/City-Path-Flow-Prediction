@@ -76,4 +76,4 @@ def plot_comparison(path_idx=15, time_range=(0, 100)):
 
 if __name__ == "__main__":
     # 运行绘图，查看第 10 条路径在前 120 分钟的表现
-    plot_comparison(path_idx=25, time_range=(0, 120))
+    plot_comparison(path_idx=10, time_range=(0, 120))

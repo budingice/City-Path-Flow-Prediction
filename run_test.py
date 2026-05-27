@@ -11,20 +11,27 @@ from src.data_utils.preprocess import TrafficDataPipeline
 
 def main():
     parser = argparse.ArgumentParser(description="Traffic Data Pipeline Test Runner")
-    # 更新默认步骤，加入 6 和 7
+    # 步骤选择
     parser.add_argument('--steps', nargs='+', type=int, default=[1, 3, 4, 5, 6, 7],
                         help='运行阶段: 1-解析, 3-匹配, 4-去噪, 5-统计, 6-路径特征, 7-模型输入')
     
-    # 增加阶段 7 专用调优参数
-    parser.add_argument('--top_paths', type=int, default=50, help='选取的高频路径节点数量')
-    parser.add_argument('--t_step', type=int, default=60, help='时间步长(单位:秒)')
+    # 命令行参数：用于覆盖 config.yaml 中的默认预处理设置
+    parser.add_argument('--top_paths', type=int, default=None, help='选取的高频路径节点数量')
+    parser.add_argument('--t_step', type=int, default=None, help='时间步长(单位:秒)')
     
     args = parser.parse_args()
 
+    # 1. 加载基础配置
     with open("configs/config.yaml", "r", encoding="utf-8") as f:
         config = yaml.safe_load(f)
     
-    # 保持你原有的初始化方式
+    # 2. 动态覆盖配置 (如果命令行指定了参数，则以命令行优先)
+    if args.top_paths is not None:
+        config['preprocess']['num_top_paths'] = args.top_paths
+    if args.t_step is not None:
+        config['preprocess']['time_step_sec'] = args.t_step
+
+    # 3. 初始化 Pipeline (现在内部的 step_7 会直接读取更新后的 config)
     pipeline = TrafficDataPipeline(config)
 
     # --- 执行流程 ---
@@ -49,42 +56,39 @@ def main():
         pipeline.step_6_extract_path_features()
 
     if 7 in args.steps:
-        print(f"\n--- 阶段 7: 构建模型输入 (TopPaths={args.top_paths}, Step={args.t_step}s) ---")
-        # 将命令行参数传递给 step_7
-        pipeline.step_7_generate_model_ready_data(
-            num_top_paths=args.top_paths, 
-            time_step_sec=args.t_step
-        )
+        print(f"\n--- 阶段 7: 构建模型输入 (Masked 双通道模式) ---")
+        print(f"📊 当前参数: TopPaths={config['preprocess']['num_top_paths']}, Step={config['preprocess']['time_step_sec']}s")
+        # 直接调用，不再传参，内部会从 self.cfg 获取
+        pipeline.step_7_generate_model_ready_data()
     
     # --- 流程检查逻辑 ---
-    print("\n--- 流程检查结果 ---")
+    print("\n" + "="*30)
+    print("📋 流程产出检查列表")
+    print("="*30)
+    
+    # 检查逻辑保持不变，但更新了路径提示
+    model_pt = Path(config['path']['model_input_pt'])
     proc_dir = Path(config['path']['processed_dir'])
     
-    def check_exists(pattern):
-        # rglob 支持通配符递归查找
-        return any(proc_dir.rglob(pattern))
-
     check_items = {
         1: ("*_parsed.parquet", "阶段 1 (解析)"),
         3: ("*_matched.parquet", "阶段 3 (匹配)"),
-        4: ("*_clean.parquet", "阶段 4 (去噪)"),
+        4: ("cleaned/*_clean.parquet", "阶段 4 (去噪)"),
         5: ("flow_matrix_T_N.parquet", "阶段 5 (统计)"),
         6: ("path_features/*_path_kinematics.parquet", "阶段 6 (路径特征)"),
-        7: ("../model_input/st_batch_data.pt", "阶段 7 (模型输入)") # 检查相对于 processed_dir 的位置
+        7: (model_pt, "阶段 7 (模型输入 .pt)")
     }
 
     for s in args.steps:
         if s in check_items:
             pattern, name = check_items[s]
-            if check_exists(pattern):
-                print(f"✅ {name} 产出文件已确认。")
+            # 针对阶段 7 (Path对象) 和其他阶段 (rglob模式) 的统一检查
+            exists = model_pt.exists() if s == 7 else any(proc_dir.rglob(pattern))
+            
+            if exists:
+                print(f"✅ {name.ljust(15)}: [已确认]")
             else:
-                # 针对阶段 7 的特殊路径检查 (因为可能在 processed_dir 同级的 model_input 下)
-                model_pt = Path("data/model_input/st_batch_data.pt")
-                if s == 7 and model_pt.exists():
-                    print(f"✅ {name} 产出文件已确认 (路径: {model_pt})。")
-                else:
-                    print(f"❌ {name} 未发现产出，请检查存储逻辑。")
-    
+                print(f"❌ {name.ljust(15)}: [未发现产出]")
+
 if __name__ == "__main__":
     main()

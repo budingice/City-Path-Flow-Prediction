@@ -288,50 +288,74 @@ class TrafficDataPipeline:
             
             # C. 提取文件名标签 (例如 0830_0900)
             parts = os.path.basename(f_path).split('_')
-            label = f"{parts[2]}_{parts[3]}"
+            base_name = os.path.basename(f_path).replace("_clean.parquet", "")
+            fname = f"{base_name}_path_kinematics.parquet"
             
             # D. 保存 Parquet 特征数据
-            fname = f"{label}_path_kinematics.parquet"
             save_path = os.path.join(data_output_dir, fname)
             path_results.to_parquet(save_path, index=False)
             
-            # E. 生成并保存可视化图表
-            plot_path_kinematics_report(path_results, viz_output_dir, label=label)
+            # E. 生成并保存可视化图表 (使用 base_name 作为标签)
+            plot_path_kinematics_report(path_results, viz_output_dir, label=base_name)
         
         logging.info(f"✅ 阶段 6 完成！")
         logging.info(f"   - 特征数据: {data_output_dir}")
         logging.info(f"   - 分析图表: {viz_output_dir}")
         
-    def step_7_generate_model_ready_data(self, num_top_paths=50, time_step_sec=60):
-        """阶段 7: 构建模型输入张量 (ST-Graph)"""
-        from .generator import PathTensorGenerator
+    def step_7_generate_model_ready_data(self):
+        """阶段 7: 构建模型输入张量 (支持双通道 Mask 与双图矩阵)"""
+        from .generator import PathTensorGenerator # 确保路径正确
         import torch
         import os
         import glob
         from tqdm import tqdm
         import pandas as pd
 
+        # 1. 路径准备
         input_dir = os.path.join(self.processed_dir, "path_features")
-        output_path = "data/model_input/st_batch_data.pt"
+        output_path = self.cfg['path']['model_input_pt']
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
 
         path_files = sorted(glob.glob(os.path.join(input_dir, "*.parquet")))
+        # 在 step_7 中添加打印，确认读取了多少个文件
+        path_files = sorted(glob.glob(os.path.join(input_dir, "*.parquet")))
+        logging.info(f"📂 阶段 7 正在处理 {len(path_files)} 个特征文件") # 这里应该是 10 个左右
+        if not path_files:
+            logging.error("❌ 阶段 7 失败：未发现特征文件。")
+            return
+
+        # 2. 初始化重构后的生成器
+        gen = PathTensorGenerator(self.cfg)
         
-        gen = PathTensorGenerator(num_top_paths, time_step_sec)
+        # 3. 构建全局库与邻接矩阵
         global_paths = gen.build_global_path_library(path_files)
-        
-        # 构建两种邻接矩阵
         adj_semantic = gen.build_semantic_adj()
         adj_topo = gen.build_topology_adj()
         
-        st_chunks = [gen.generate_chunk(pd.read_parquet(f)) for f in tqdm(path_files, desc="生成时空张量")]
+        # 4. 生成时空张量 [T, N, 2]
+        st_chunks = []
+        for f in tqdm(path_files, desc="生成双通道时空张量"):
+            df_feat = pd.read_parquet(f)
+            # 现在 generate_chunk 返回的是 [T, N, 2]
+            chunk = gen.generate_chunk(df_feat)
+            st_chunks.append(chunk)
 
-        # 封装所有矩阵和数据
-        torch.save({
-            'x_list': st_chunks,
-            'adj_semantic': adj_semantic,
-            'adj_topo': adj_topo,
-            'path_labels': global_paths
-        }, output_path)
+        # 5. 计算流量通道的全局最大值（用于归一化）
+        # 注意：只计算通道 0 的最大值
+        all_flows = np.concatenate([c[..., 0].flatten() for c in st_chunks])
+        max_val = float(np.max(all_flows))
+        logging.info(f"📊 流量通道最大值 (Max Val): {max_val}")
+
+        # 6. 封装并保存
+        save_data = {
+            'x_list': st_chunks,           # 形状列表 [T_i, N, 2]
+            'adj_semantic': adj_semantic,   # [N, N]
+            'adj_topo': adj_topo,           # [N, N]
+            'path_labels': global_paths,
+            'max_val': max_val,            # 关键：保存归一化基准
+            'config_snapshot': self.cfg['preprocess'] # 保存一份配置快照便于追溯
+        }
         
-        logging.info(f"✨ 输入特征数据已就绪！")
+        torch.save(save_data, output_path)
+        logging.info(f"✨ 预处理完成！特征数据已存至: {output_path}")
+        return output_path

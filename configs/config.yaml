@@ -1,59 +1,82 @@
 # ==========================================
-# 路径配置 (Paths)
+# 路径配置 (Paths) - 保持不变
 # ==========================================
 path:
-  raw_data_dir: "data/raw/dataset"        
-  graph_file: "data/raw/athens_road_network.graphml" 
-  processed_dir: "data/processed"         
-  
-  # 模型训练产出
-  model_input_pt: "data/model_input/st_batch_data.pt" 
-  checkpoint_dir: "checkpoints"           
-  log_dir: "logs"                         
-  exp_root: "experiments"                 # 对应你的 experiments/ 文件夹
-
+  raw_data_dir: "data/raw/dataset"
+  graph_file: "data/raw/athens_road_network.graphml"
+  processed_dir: "data/processed"
+  model_input_pt: "data/model_input/st_batch_data.pt"
+  checkpoint_dir: "checkpoints"
+  log_dir: "logs"
+  exp_root: "experiments"
+  plot_root: "experiments/Thesis_Plots"
 # ==========================================
 # 预处理配置 (Preprocess)
 # ==========================================
 preprocess:
-  sampling_rate: 25                       
-  num_top_paths: 50                       # N = 50
-  time_step_sec: 60                       # T_step = 1min
+  sampling_rate: 25
+  num_top_paths: 200
+  time_step_sec: 60
+  # 新增：定义缺失数据的规律（用于生成 Mask 通道）
+  # pNEUMA 典型特征：每 30min 采样 15min
+  duty_cycle: 
+    active_minutes: 15
+    period_minutes: 30
 
 # ==========================================
 # 训练超参数 (Training)
 # ==========================================
 train:
-  device: "cuda"                          # cuda 或 cpu
-  seed: 42                                
-  batch_size: 32                          
-  epochs: 100                             
-  lr: 0.0005                               
-  weight_decay: 1.0e-4                    
-  early_stop: 30                          
+  device: "cuda"
+  seed: 42
+  batch_size: 32
+  epochs: 100
+  lr: 0.000156
+  weight_decay: 1.0e-4
+  early_stop: 30
+  huber_delta: 1.0        # 新增：Huber Loss 的阈值，控制对异常值的敏感度
   
-  # 实验设置 (消融实验核心)
-  window_size: 12                         # 输入过去 12 分钟
-  horizon: 3                              # 预测未来 3 分钟
-  split_ratio: [0.7, 0.1, 0.2]            # 训练/验证/测试比例
-  adj_type: "semantic"                    # 可选: semantic, topo
+  window_size: 12
+  horizon: 3
+  split_ratio: [0.7, 0.1, 0.2]
 
 # ==========================================
 # 模型架构参数 (Model Architecture)
 # ==========================================
 model:
-  adaptive:
-    hidden_dim: 128                       # LSTM 和 GCN 的隐藏层维度
-    embed_dim: 10                         # 自适应矩阵的 Embedding 维度 (nodevec)
-    dropout: 0.2
+  hidden_dim: 220
+  embed_dim: 10
+  dropout: 0.2
   
-  vanilla:
-    hidden_dim: 64
-    dropout: 0.2
+  # 新增：自适应模块控制
+  adaptive:
+    temperature: 0.5      # 锐化系数
+    alpha_init: 0.6       # 静态/动态融合初始权重
+    
+  # 新增：图融合控制
+  graph_fusion:
+    beta: 0.5             # Semantic (Jaccard) 与 Topo 的融合比例
+
+# ==========================================
+# 消融实验开关 (Ablation Control) - 核心更新！
+# ==========================================
+ablation:
+  use_mask: True          # 是否使用 Masked Loss (解决直线化核心)
+  use_gated_res: True     # 是否使用门控残差 (解决直线化核心)
+  use_adaptive: True      # 是否开启自适应矩阵
+  use_topo: True          # 是否在静态矩阵中融合物理拓扑
+
+# ==========================================
+# 路径异质性分析 (Heterogeneity Analysis) - 新增
+# ==========================================
+analysis:
+  cv_thresholds: [0.6, 1.2] # 区分 Stable, Moderate, Volatile 的阈值
+  metrics: ["mae", "rmse", "mape", "wape"]
+  plot_path_ids: [0, 10, 25, 49] # 选取不同特征的路径进行对比绘图
 
 # ==========================================
 # 评估与日志 (Logging)
 # ==========================================
 logging:
   save_results_tags: ["mae", "rmse", "mape"]
-  plot_examples: 3                        # 测试结束后随机画几条路径的对比图
+  plot_examples: 5        # 增加绘图数量，方便观察是否有“直线化”趋势

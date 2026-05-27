@@ -1,18 +1,35 @@
-# --- 通用临时文件 ---
+# General editor and OS files
 .vscode/
 .idea/
-*.log
 Thumbs.db
 desktop.ini
 
-# 忽略所有 CSV 数据文件
-*.csv
-# 或者忽略整个数据文件夹
-Dataset/
-
-# --- Python (如果你用 Python) ---
+# Python caches and local environments
 __pycache__/
 *.py[cod]
 *$py.class
+.venv/
 venv/
 .env
+
+# Logs and temporary runtime files
+*.log
+logs/
+checkpoints/
+
+# Raw datasets and generated tabular data
+Dataset/
+*.csv
+*.parquet
+
+# Generated model artifacts
+*.pt
+*.pth
+*.npz
+*.npy
+
+# Generated experiment and analysis outputs
+eda_results/
+experiments/
+model_results/
+outputs/
